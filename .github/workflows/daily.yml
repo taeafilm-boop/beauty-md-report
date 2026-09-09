@@ -4,19 +4,21 @@ on:
   schedule:
     # 한국시간 평일(월~금) 07:30 = UTC 기준 일~목 22:30
     - cron: '30 22 * * 0-4'
-  workflow_dispatch: # 모바일에서 수동 즉시 실행 지원
+  workflow_dispatch: # 수동 즉시 실행 지원
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-- name: Run Draft Creator
+
+      - name: Run Draft Creator
         env:
-          GMAIL_USER: "taeafilm@gmail.com"
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           GMAIL_PASS: ${{ secrets.GMAIL_APP_PASSWORD }}
         run: python create_draft.py
