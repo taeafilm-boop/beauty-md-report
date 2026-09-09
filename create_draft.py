@@ -4,7 +4,7 @@ import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-GMAIL_USER = "MD_REPORT"
+GMAIL_USER = "taeafilm@gmail.com"
 GMAIL_PASS = os.environ.get("oihd zryl hiec wmsk")
 TO_EMAIL = "7467@11stcorp.com"
 
