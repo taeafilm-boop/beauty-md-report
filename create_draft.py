@@ -5,7 +5,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 GMAIL_USER = "taeafilm@gmail.com"
-GMAIL_PASS = os.environ.get("GMAIL_APP_PASSWORD")
+GMAIL_PASS = os.environ.get("oihd zryl hiec wmsk")
 TO_EMAIL = "7467@11stcorp.com"
 
 # 이메일 메시지 규격 구성
