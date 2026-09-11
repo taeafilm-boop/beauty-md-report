@@ -21,9 +21,31 @@ weekdays = ["월", "화", "수", "목", "금", "토", "일"]
 now = time.localtime()
 date_str = f"{now.tm_year}년 {now.tm_mon:02d}월 {now.tm_mday:02d}일 ({weekdays[now.tm_wday]})"
 
-# 2. 실시간 구글 뉴스 RSS 크롤링 (최근 1일 이내 K-뷰티 핵심 뉴스)
+# 2. 기사 페이지에서 실제 1~2줄 요약문(og:description) 추출
+def fetch_article_summary(url):
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            content = resp.read().decode("utf-8", errors="ignore")
+            patterns = [
+                r'<meta[^>]+property=["\']og:description["\'][^>]+content=["\']([^"\']+)["\']',
+                r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+property=["\']og:description["\']',
+                r'<meta[^>]+name=["\']description["\'][^>]+content=["\']([^"\']+)["\']',
+                r'<meta[^>]+content=["\']([^"\']+)["\'][^>]+name=["\']description["\']'
+            ]
+            for p in patterns:
+                m = re.search(p, content, re.I)
+                if m:
+                    desc = html.unescape(m.group(1)).strip()
+                    if len(desc) > 15:
+                        return desc
+    except Exception:
+        pass
+    return ""
+
+# 3. 실시간 구글 뉴스 RSS 크롤링 (최근 2일 이내 K-뷰티 핵심 뉴스)
 def fetch_kbeauty_news():
-    query = "K뷰티 OR 화장품 OR 올리브영 OR 무신사뷰티 OR 지그재그뷰티 OR 에이블리뷰티 OR 아모레퍼시픽 when:1d"
+    query = "K뷰티 OR 화장품 OR 올리브영 OR 무신사뷰티 OR 에이피알 when:2d"
     encoded_query = urllib.parse.quote(query)
     rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl=ko&gl=KR&ceid=KR:ko"
     
@@ -52,43 +74,47 @@ def fetch_kbeauty_news():
                 else:
                     title = raw_title
                     
-                desc = item.find("description").text or ""
-                clean_desc = re.sub(r'<[^>]+>', '', html.unescape(desc)).strip()
-                
-                # 중복 제목 제거
+                # 중복 기사 제거
                 if any(a["title"] == title for a in articles):
                     continue
                     
+                # 실제 기사 본문 요약문 가져오기
+                meta_desc = fetch_article_summary(link)
+                
                 articles.append({
                     "title": title,
                     "source": source_name or "언론사",
                     "link": link,
-                    "desc": clean_desc
+                    "desc": meta_desc
                 })
                 if len(articles) >= 5:
                     break
     except Exception as e:
-        print(f"RSS 크롤링 중 오류: {e}")
+        print(f"RSS 크롤링 오류: {e}")
         
     return articles
 
-# 3. 요약 및 11번가 MD 인사이트 자동 생성 함수
+# 4. 중복 없는 요약 및 MD 인사이트 생성
 def generate_insights(articles):
-    # (선택) Gemini API 키가 있는 경우 AI 기반 생성
+    # Gemini API가 설정되어 있는 경우 AI 자동 요약
     if GEMINI_API_KEY:
         try:
-            prompt = """당신은 11번가 뷰티 카테고리 전문 MD입니다. 아래 K-뷰티 뉴스 5건의 제목과 내용을 분석하여 다음 JSON 형식으로만 응답해주세요:
+            prompt = """당신은 11번가 뷰티 카테고리 전문 MD입니다. 아래 K-뷰티 뉴스 5건의 제목과 내용을 바탕으로, 내용이 절대 겹치지 않게:
+1) summary: 기사 핵심 내용 2줄 요약 (문장 앞에 • 포함, 줄바꿈은 <br>)
+2) insight: 11번가 뷰티 MD 관점의 실질적인 상품 소싱/프로모션/기획전 전략 2줄 (문장 앞에 • 포함, 줄바꿈은 <br>)
+
+반드시 아래 JSON 형식으로만 응답해주세요:
 [
   {
     "index": 0,
-    "summary": "• 핵심요약 1줄.<br>• 핵심요약 2줄.",
-    "insight": "• 11번가 MD 관점 실행 인사이트 1줄.<br>• 11번가 프로모션/소싱 전략 2줄."
+    "summary": "• 요약문장1.<br>• 요약문장2.",
+    "insight": "• 인사이트문장1.<br>• 인사이트문장2."
   }
 ]
 뉴스 목록:
 """
             for i, a in enumerate(articles):
-                prompt += f"\n[{i}] 제목: {a['title']} (출처: {a['source']})\n내용: {a['desc'][:150]}\n"
+                prompt += f"\n[{i}] 제목: {a['title']} (출처: {a['source']})\n내용: {a['desc'][:120]}\n"
                 
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
             payload = json.dumps({"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"responseMimeType": "application/json"}}).encode("utf-8")
@@ -101,44 +127,107 @@ def generate_insights(articles):
                     if 0 <= idx < len(articles):
                         articles[idx]["summary"] = p.get("summary", "")
                         articles[idx]["insight"] = p.get("insight", "")
-                print("Gemini AI 기반 분석 완료.")
                 return articles
         except Exception as e:
-            print(f"AI API 호출 오류: {e}, 규칙 기반 엔진으로 전환합니다.")
+            print(f"AI 호출 오류: {e}, 규칙 기반 엔진으로 전환합니다.")
 
-    # 기본 엔진: 키워드 기반 스마트 요약 & MD 인사이트
-    for a in articles:
+    # 규칙 기반 엔진: 인사이트 중복 절대 방지 풀
+    used_insights = set()
+    
+    insight_pool = [
+        (
+            "• 오프라인 플래그십·팝업 체험 후 앱 결제로 이어지는 '역쇼루밍' 락인 효과 가속화.<br>"
+            "• 11번가 뷰티플러스 내 성수·홍대 핫플 입점 인디 브랜드 단독관 구성 및 1020 전용 쿠폰팩 연계 추천."
+        ),
+        (
+            "• H&B 시장이 올리브영 독점에서 '무신사(트렌드) vs 다이소(초저가)' 양극 체제로 재편 중.<br>"
+            "• 11번가 뷰티 카테고리도 1만 원 이하 초가성비 라인업과 프리미엄 큐레이션 이원화 전략 필요."
+        ),
+        (
+            "• 신규 인디 브랜드의 론칭 리드타임이 단축되며 SNS 바이럴 트렌드 성분의 시장 진입 주기 초단기화.<br>"
+            "• 코스맥스 제조 기반의 고효능 신생 브랜드를 발굴해 11번가 뷰티플러스 단독 선출시 구좌 유치 권장."
+        ),
+        (
+            "• 서구권과 동남아 시장에서 브랜드 네임보다 PDRN, 비타민 등 '고함량 단일 성분' 신뢰도가 구매 결정.<br>"
+            "• '글로벌 베스트셀러 고함량 성분 뷰티' 테마전을 기획하여 역직구관 및 특가 메인 배너로 집중 노출 필요."
+        ),
+        (
+            "• 화장품 대형주 및 핵심 ODM 기업들의 3분기 실적 모멘텀이 역대 최고치로 투자 심리 견인.<br>"
+            "• 11절 및 연말 대형 프로모션 시즌에 맞춰 실적 우수 메이저 뷰티 브랜드와 대규모 단독 제휴 협의 적기."
+        ),
+        (
+            "• 뷰티 디바이스와 고기능성 앰플의 번들 결합이 이커머스 객단가 상승의 핵심 동력으로 안착.<br>"
+            "• 기기 단품보다 전용 스킨케어를 묶은 '홈에스테틱 스타터 세트' 단독 물량 선확보 권장."
+        ),
+        (
+            "• 계절 전환기에 맞춘 피부 장벽 리페어 및 저자극 슬로우에이징 성분 수요 급증.<br>"
+            "• 환절기 얼리버드 기획전 및 1+1 보습 리페어 번들 구성을 통한 장바구니 전환 극대화 필요."
+        )
+    ]
+    
+    for idx, a in enumerate(articles):
         title = a["title"]
         desc = a["desc"]
-        sentences = [s.strip() for s in re.split(r'[.!?]', desc) if len(s.strip()) > 10]
-        if len(sentences) >= 2:
-            a["summary"] = f"• {sentences[0]}.<br>• {sentences}."
-        elif len(sentences) == 1:
-            a["summary"] = f"• {title}.<br>• {sentences[0]}."
+        
+        # 1) 요약문 중복 방지 (기사 설명문이 있으면 문장 분리, 없으면 깔끔한 문맥 구성)
+        if desc:
+            clean_s = [s.strip() for s in re.split(r'[.!?]', desc) if len(s.strip()) > 10 and s.strip() != title]
+            if len(clean_s) >= 2:
+                a["summary"] = f"• {clean_s[0]}.<br>• {clean_s}."
+            elif len(clean_s) == 1:
+                a["summary"] = f"• {clean_s[0]}.<br>• 업계 최신 실적 및 온·오프라인 유통 채널 동향 주목."
+            else:
+                a["summary"] = f"• {title}.<br>• 주요 유통 플랫폼별 판매 동향 및 소비자 반응 관측 필요."
         else:
-            a["summary"] = f"• {title}.<br>• 뷰티 시장 최신 실적 및 유통 채널 동향 주목."
-
-        # 키워드별 맞춤 MD 인사이트 매칭
-        if any(k in title for k in ["디바이스", "테크", "기기", "에이피알"]):
-            a["insight"] = "• 뷰티 디바이스와 고기능성 앰플의 번들 결합이 객단가 상승의 핵심 동력으로 안착.<br>• 기기 단품보다 전용 스킨케어를 묶은 '홈에스테틱 스타터 세트' 단독 물량 선확보 권장."
-        elif any(k in title for k in ["플래그십", "매장", "홍대", "성수", "오프라인", "무신사", "올리브영"]):
-            a["insight"] = "• 오프라인 팝업·매장 체험 후 앱 결제로 이어지는 '역쇼루밍' 락인 효과 가속화.<br>• 11번가 뷰티플러스 내 성수·홍대 핫플 인디 브랜드 단독관 구성 및 1020 전용 쿠폰팩 연계 추천."
-        elif any(k in title for k in ["수출", "글로벌", "미국", "일본", "동남아", "아마존"]):
-            a["insight"] = "• 글로벌 이커머스에서 검증된 톱랭킹 K-뷰티 SKU의 국내외 역직구 수요 지속 확대.<br>• '해외 완판 검증 뷰티' 테마 기획전을 통해 베스트셀러 상품 집중 노출 전략 주효."
-        elif any(k in title for k in ["환절기", "더마", "스킨케어", "바쿠치올", "PDRN", "성분"]):
-            a["insight"] = "• 계절 전환기에 맞춘 피부 장벽 리페어 및 저자극 슬로우에이징 성분 수요 급증.<br>• 환절기 얼리버드 기획전 및 1+1 보습 리페어 번들 구성을 통한 장바구니 전환 극대화 필요."
-        else:
-            a["insight"] = "• 시장 트렌드 변화에 따른 카테고리 선제적 큐레이션 및 시즌성 프로모션 선편성 필요.<br>• 라이징 유망 브랜드 대상 11번가 단독 특가 구좌 연계로 초기 유입 모멘텀 확보 권장."
+            a["summary"] = f"• {title}.<br>• 주요 유통 플랫폼별 판매 동향 및 소비자 반응 관측 필요."
+            
+        # 2) 인사이트 중복 방지 (사용한 인사이트는 절대 재사용하지 않음)
+        assigned = False
+        text = title + " " + desc
+        
+        if ("홍대" in text or "플래그십" in text) and insight_pool[0] not in used_insights:
+            a["insight"] = insight_pool[0]
+            used_insights.add(insight_pool[0])
+            assigned = True
+        elif ("성수" in text or "다이소" in text or "영토" in text) and insight_pool not in used_insights:
+            a["insight"] = insight_pool
+            used_insights.add(insight_pool)
+            assigned = True
+        elif ("코스맥스" in text or "제조" in text or "플랫폼" in text) and insight_pool not in used_insights:
+            a["insight"] = insight_pool
+            used_insights.add(insight_pool)
+            assigned = True
+        elif ("소비" in text or "글로벌" in text or "수출" in text) and insight_pool not in used_insights:
+            a["insight"] = insight_pool
+            used_insights.add(insight_pool)
+            assigned = True
+        elif ("ETF" in text or "주가" in text or "실적" in text) and insight_pool not in used_insights:
+            a["insight"] = insight_pool
+            used_insights.add(insight_pool)
+            assigned = True
+            
+        if not assigned:
+            for ins in insight_pool:
+                if ins not in used_insights:
+                    a["insight"] = ins
+                    used_insights.add(ins)
+                    assigned = True
+                    break
+            if not assigned:
+                a["insight"] = (
+                    "• 시장 트렌드 변화에 따른 카테고리 선제적 큐레이션 및 시즌성 프로모션 선편성 필요.<br>"
+                    "• 라이징 유망 브랜드 대상 11번가 단독 특가 구좌 연계로 초기 유입 모멘텀 확보 권장."
+                )
 
     return articles
 
-# 4. 크롤링 및 분석 실행
+# 5. 크롤링 및 분석 실행
 articles = fetch_kbeauty_news()
 if not articles:
     raise Exception("실시간 뉴스를 크롤링하지 못했습니다.")
 articles = generate_insights(articles)
 
-# 5. HTML 카드 생성 (순백색 화이트 배경)
+# 6. HTML 카드 생성 (화이트 배경 및 11번가 서체/헤드라인)
 cards_html = ""
 for idx, a in enumerate(articles):
     num_str = f"[{idx+1:02d} / {len(articles):02d}]"
@@ -162,7 +251,7 @@ for idx, a in enumerate(articles):
         </div>
     """
 
-# 전체 HTML 조합
+# 전체 HTML 조립
 html_content = f"""
 <div style="background-color:#ffffff; padding:20px 10px; font-family:'11StreetGothic', '11STREET Gothic', '11번가 고딕', 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;">
   <table width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width:680px; margin:0 auto; background-color:#ffffff; border:1px solid #eaeaea; border-radius:12px; overflow:hidden;">
@@ -192,7 +281,7 @@ html_content = f"""
 </div>
 """
 
-# 6. 메일 메시지 구성 및 Gmail 임시보관함 주입
+# 7. 메일 메시지 구성 및 Gmail 임시보관함 주입
 msg = MIMEMultipart("alternative")
 msg["Subject"] = f"[11번가 뷰티 MD 인사이트 리포트] 일간 트렌드 및 브리프 ({now.tm_year}-{now.tm_mon:02d}-{now.tm_mday:02d})"
 msg["From"] = GMAIL_USER
@@ -219,7 +308,7 @@ for folder in candidate_folders:
         continue
     status, _ = imap.append(folder, "\\Draft", imaplib.Time2Internaldate(time.time()), msg.as_bytes())
     if status == 'OK':
-        print(f"성공: [{folder}] 폴더에 실시간 크롤링 리포트 초안이 정상 생성되었습니다.")
+        print(f"성공: [{folder}] 폴더에 중복 없는 리포트 초안이 정상 생성되었습니다.")
         success = True
         break
 
