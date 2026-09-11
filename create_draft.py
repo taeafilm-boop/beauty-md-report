@@ -131,45 +131,45 @@ def generate_insights(articles):
         except Exception as e:
             print(f"AI 호출 오류: {e}, 규칙 기반 엔진으로 전환합니다.")
 
-    # 규칙 기반 엔진: 인사이트 중복 절대 방지 풀
-    used_insights = set()
-    
-    insight_pool = [
+    # 규칙 기반 엔진: 인사이트 중복 절대 방지 룰 목록
+    RULES = [
         (
-            "• 오프라인 플래그십·팝업 체험 후 앱 결제로 이어지는 '역쇼루밍' 락인 효과 가속화.<br>"
-            "• 11번가 뷰티플러스 내 성수·홍대 핫플 입점 인디 브랜드 단독관 구성 및 1020 전용 쿠폰팩 연계 추천."
+            ["홍대", "플래그십"],
+            "• 오프라인 플래그십·팝업 체험 후 앱 결제로 이어지는 '역쇼루밍' 락인 효과 가속화.<br>• 11번가 뷰티플러스 내 성수·홍대 핫플 입점 인디 브랜드 단독관 구성 및 1020 전용 쿠폰팩 연계 추천."
         ),
         (
-            "• H&B 시장이 올리브영 독점에서 '무신사(트렌드) vs 다이소(초저가)' 양극 체제로 재편 중.<br>"
-            "• 11번가 뷰티 카테고리도 1만 원 이하 초가성비 라인업과 프리미엄 큐레이션 이원화 전략 필요."
+            ["성수", "다이소", "영토"],
+            "• H&B 시장이 올리브영 독점에서 '무신사(트렌드) vs 다이소(초저가)' 양극 체제로 재편 중.<br>• 11번가 뷰티 카테고리도 1만 원 이하 초가성비 라인업과 프리미엄 큐레이션 이원화 전략 필요."
         ),
         (
-            "• 신규 인디 브랜드의 론칭 리드타임이 단축되며 SNS 바이럴 트렌드 성분의 시장 진입 주기 초단기화.<br>"
-            "• 코스맥스 제조 기반의 고효능 신생 브랜드를 발굴해 11번가 뷰티플러스 단독 선출시 구좌 유치 권장."
+            ["코스맥스", "제조", "플랫폼"],
+            "• 신규 인디 브랜드의 론칭 리드타임이 단축되며 SNS 바이럴 트렌드 성분의 시장 진입 주기 초단기화.<br>• 코스맥스 제조 기반의 고효능 신생 브랜드를 발굴해 11번가 뷰티플러스 단독 선출시 구좌 유치 권장."
         ),
         (
-            "• 서구권과 동남아 시장에서 브랜드 네임보다 PDRN, 비타민 등 '고함량 단일 성분' 신뢰도가 구매 결정.<br>"
-            "• '글로벌 베스트셀러 고함량 성분 뷰티' 테마전을 기획하여 역직구관 및 특가 메인 배너로 집중 노출 필요."
+            ["소비", "글로벌", "수출"],
+            "• 서구권과 동남아 시장에서 브랜드 네임보다 PDRN, 비타민 등 '고함량 단일 성분' 신뢰도가 구매 결정.<br>• '글로벌 베스트셀러 고함량 성분 뷰티' 테마전을 기획하여 역직구관 및 특가 메인 배너로 집중 노출 필요."
         ),
         (
-            "• 화장품 대형주 및 핵심 ODM 기업들의 3분기 실적 모멘텀이 역대 최고치로 투자 심리 견인.<br>"
-            "• 11절 및 연말 대형 프로모션 시즌에 맞춰 실적 우수 메이저 뷰티 브랜드와 대규모 단독 제휴 협의 적기."
+            ["ETF", "주가", "실적"],
+            "• 화장품 대형주 및 핵심 ODM 기업들의 3분기 실적 모멘텀이 역대 최고치로 투자 심리 견인.<br>• 11절 및 연말 대형 프로모션 시즌에 맞춰 실적 우수 메이저 뷰티 브랜드와 대규모 단독 제휴 협의 적기."
         ),
         (
-            "• 뷰티 디바이스와 고기능성 앰플의 번들 결합이 이커머스 객단가 상승의 핵심 동력으로 안착.<br>"
-            "• 기기 단품보다 전용 스킨케어를 묶은 '홈에스테틱 스타터 세트' 단독 물량 선확보 권장."
+            ["디바이스", "테크"],
+            "• 뷰티 디바이스와 고기능성 앰플의 번들 결합이 이커머스 객단가 상승의 핵심 동력으로 안착.<br>• 기기 단품보다 전용 스킨케어를 묶은 '홈에스테틱 스타터 세트' 단독 물량 선확보 권장."
         ),
         (
-            "• 계절 전환기에 맞춘 피부 장벽 리페어 및 저자극 슬로우에이징 성분 수요 급증.<br>"
-            "• 환절기 얼리버드 기획전 및 1+1 보습 리페어 번들 구성을 통한 장바구니 전환 극대화 필요."
+            ["환절기", "더마", "스킨케어", "바쿠치올"],
+            "• 계절 전환기에 맞춘 피부 장벽 리페어 및 저자극 슬로우에이징 성분 수요 급증.<br>• 환절기 얼리버드 기획전 및 1+1 보습 리페어 번들 구성을 통한 장바구니 전환 극대화 필요."
         )
     ]
+    
+    used_insights = set()
     
     for idx, a in enumerate(articles):
         title = a["title"]
         desc = a["desc"]
         
-        # 1) 요약문 중복 방지 (기사 설명문이 있으면 문장 분리, 없으면 깔끔한 문맥 구성)
+        # 1) 요약문 중복 방지 (기사 설명문이 있으면 문장 분리, 없으면 깔끔한 단일 문맥 구성)
         if desc:
             clean_s = [s.strip() for s in re.split(r'[.!?]', desc) if len(s.strip()) > 10 and s.strip() != title]
             if len(clean_s) >= 2:
@@ -181,43 +181,32 @@ def generate_insights(articles):
         else:
             a["summary"] = f"• {title}.<br>• 주요 유통 플랫폼별 판매 동향 및 소비자 반응 관측 필요."
             
-        # 2) 인사이트 중복 방지 (사용한 인사이트는 절대 재사용하지 않음)
+        # 2) 인사이트 중복 방지 (튜플 룰 순회로 안전하게 고유 인사이트 매칭)
         assigned = False
         text = title + " " + desc
         
-        if ("홍대" in text or "플래그십" in text) and insight_pool[0] not in used_insights:
-            a["insight"] = insight_pool[0]
-            used_insights.add(insight_pool[0])
-            assigned = True
-        elif ("성수" in text or "다이소" in text or "영토" in text) and insight_pool not in used_insights:
-            a["insight"] = insight_pool
-            used_insights.add(insight_pool)
-            assigned = True
-        elif ("코스맥스" in text or "제조" in text or "플랫폼" in text) and insight_pool not in used_insights:
-            a["insight"] = insight_pool
-            used_insights.add(insight_pool)
-            assigned = True
-        elif ("소비" in text or "글로벌" in text or "수출" in text) and insight_pool not in used_insights:
-            a["insight"] = insight_pool
-            used_insights.add(insight_pool)
-            assigned = True
-        elif ("ETF" in text or "주가" in text or "실적" in text) and insight_pool not in used_insights:
-            a["insight"] = insight_pool
-            used_insights.add(insight_pool)
-            assigned = True
-            
+        for keywords, insight_text in RULES:
+            if insight_text in used_insights:
+                continue
+            if any(k in text for k in keywords):
+                a["insight"] = insight_text
+                used_insights.add(insight_text)
+                assigned = True
+                break
+                
         if not assigned:
-            for ins in insight_pool:
-                if ins not in used_insights:
-                    a["insight"] = ins
-                    used_insights.add(ins)
+            for _, insight_text in RULES:
+                if insight_text not in used_insights:
+                    a["insight"] = insight_text
+                    used_insights.add(insight_text)
                     assigned = True
                     break
-            if not assigned:
-                a["insight"] = (
-                    "• 시장 트렌드 변화에 따른 카테고리 선제적 큐레이션 및 시즌성 프로모션 선편성 필요.<br>"
-                    "• 라이징 유망 브랜드 대상 11번가 단독 특가 구좌 연계로 초기 유입 모멘텀 확보 권장."
-                )
+                    
+        if not assigned:
+            a["insight"] = (
+                "• 시장 트렌드 변화에 따른 카테고리 선제적 큐레이션 및 시즌성 프로모션 선편성 필요.<br>"
+                "• 라이징 유망 브랜드 대상 11번가 단독 특가 구좌 연계로 초기 유입 모멘텀 확보 권장."
+            )
 
     return articles
 
@@ -227,7 +216,7 @@ if not articles:
     raise Exception("실시간 뉴스를 크롤링하지 못했습니다.")
 articles = generate_insights(articles)
 
-# 6. HTML 카드 생성 (화이트 배경 및 11번가 서체/헤드라인)
+# 6. HTML 카드 생성 (완전한 화이트 배경 및 11번가 서체)
 cards_html = ""
 for idx, a in enumerate(articles):
     num_str = f"[{idx+1:02d} / {len(articles):02d}]"
@@ -308,7 +297,7 @@ for folder in candidate_folders:
         continue
     status, _ = imap.append(folder, "\\Draft", imaplib.Time2Internaldate(time.time()), msg.as_bytes())
     if status == 'OK':
-        print(f"성공: [{folder}] 폴더에 중복 없는 리포트 초안이 정상 생성되었습니다.")
+        print(f"성공: [{folder}] 폴더에 실시간 크롤링 리포트 초안이 정상 생성되었습니다.")
         success = True
         break
 
