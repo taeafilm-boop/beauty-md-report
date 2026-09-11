@@ -44,9 +44,9 @@ def fetch_article_summary(url):
         pass
     return ""
 
-# 3. 실시간 구글 뉴스 RSS 크롤링 (최근 2일 이내 K-뷰티 핵심 뉴스)
+# 3. 실시간 구글 뉴스 RSS 크롤링 (최근 1일 이내 K-뷰티 핵심 뉴스)
 def fetch_kbeauty_news():
-    query = "K뷰티 OR 화장품 OR 올리브영 OR 무신사뷰티 OR 에이피알 when:2d"
+    query = "K뷰티 OR 화장품 OR 올리브영 OR 무신사뷰티 OR 지그재그뷰티 OR 에이블리뷰티 OR 컬리뷰티 OR 아모레퍼시픽 OR 에이블씨앤시 when:1d"
     encoded_query = urllib.parse.quote(query)
     rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl=ko&gl=KR&ceid=KR:ko"
     
