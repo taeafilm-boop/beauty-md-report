@@ -5,6 +5,9 @@ on:
     - cron: '30 22 * * 0-4'
   workflow_dispatch:
 
+env:
+  TZ: Asia/Seoul # 👈 시스템 시간대를 한국 시간으로 강제 설정
+
 jobs:
   build:
     runs-on: ubuntu-latest
