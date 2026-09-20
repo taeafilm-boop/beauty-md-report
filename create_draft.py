@@ -18,13 +18,12 @@ GMAIL_PASS = (os.environ.get("GMAIL_APP_PASSWORD") or os.environ.get("GMAIL_PASS
 TO_EMAIL = "7467@11stcorp.com"
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 
-# 날짜 및 한글 요일 계산
 weekdays = ["월", "화", "수", "목", "금", "토", "일"]
 now = time.localtime()
 date_str = f"{now.tm_year}년 {now.tm_mon:02d}월 {now.tm_mday:02d}일 ({weekdays[now.tm_wday]})"
 
 # ══════════════════════════════════════════════════════
-# ▶ 2. 뉴스 데이터 수집 함수
+# ▶ 2. 뉴스 데이터 수집 및 유사도/브랜드 중복 필터링 함수
 # ══════════════════════════════════════════════════════
 def fetch_article_summary(url):
     try:
@@ -49,24 +48,24 @@ def fetch_article_summary(url):
     return ""
 
 def fetch_cosmetic_news():
-    # 💡 올리브영 기준 최신/대세 브랜드군으로 전면 개편
-    brands = (
-        "메디힐 OR 라운드랩 OR 토리든 OR 에스트라 OR 넘버즈인 OR 아누아 OR "
-        "바이오던스 OR 닥터지 OR 아이소이 OR 일소 OR 비레디 OR 오브제 OR "
-        "클리오 OR 롬앤 OR 웨이크메이크 OR 퓌 OR VT OR 구달 OR 달바 OR 스킨푸드"
-    )
+    BRANDS = [
+        "메디힐", "라운드랩", "토리든", "에스트라", "넘버즈인", "아누아", 
+        "바이오던스", "닥터지", "아이소이", "일소", "비레디", "오브제", 
+        "클리오", "롬앤", "웨이크메이크", "퓌", "VT", "구달", "달바", "스킨푸드"
+    ]
+    
+    brand_query = " OR ".join(BRANDS)
     product_keywords = "신제품 OR 출시 OR 신상 OR 완판 OR 랭킹 OR 쿠션 OR 앰플 OR 세럼 OR 크림 OR 립 OR 패드 OR 클렌징 OR 선크림"
     
-    query = f"({brands}) ({product_keywords}) when:2d"
+    query = f"({brand_query}) ({product_keywords}) when:2d"
     encoded_query = urllib.parse.quote(query)
     rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl=ko&gl=KR&ceid=KR:ko"
     
-    req = urllib.request.Request(
-        rss_url,
-        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-    )
+    req = urllib.request.Request(rss_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
     
     articles = []
+    used_brands = set() # 💡 핵심: 리포트에 이미 들어간 브랜드 추적
+    
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             tree = ET.fromstring(resp.read())
@@ -85,17 +84,34 @@ def fetch_cosmetic_news():
                 else:
                     title = raw_title
                     
-                if any(a["title"] == title for a in articles):
+                # 💡 필터 1: 특정 브랜드 도배 방지 (동일 브랜드 기사는 1개만 허용)
+                current_brand = None
+                for b in BRANDS:
+                    if b in title:
+                        current_brand = b
+                        break
+                
+                if current_brand and current_brand in used_brands:
+                    continue # 이미 챙긴 브랜드면 과감히 패스하고 다음 기사 탐색
+                    
+                # 💡 필터 2: 보도자료 복붙 기사 방지 (앞 10글자가 같으면 유사 기사로 간주하여 패스)
+                title_prefix = title.replace(" ", "")[:10]
+                if any(a["title"].replace(" ", "")[:10] == title_prefix for a in articles):
                     continue
                     
                 meta_desc = fetch_article_summary(link)
                 
+                # 브랜드가 식별되었으면 목록에 추가
+                if current_brand:
+                    used_brands.add(current_brand)
+                    
                 articles.append({
                     "title": title,
                     "source": source_name or "언론사",
                     "link": link,
                     "desc": meta_desc
                 })
+                
                 if len(articles) >= 5:
                     break
     except Exception as e:
@@ -110,7 +126,6 @@ def generate_insights(articles):
     if GEMINI_API_KEY:
         print("💡 Gemini AI를 사용하여 기사 요약 및 인사이트를 생성합니다...")
         try:
-            # 💡 프롬프트 고도화: MD 관점 추가 및 중복 방지 제약조건 강화
             prompt = """당신은 11번가 뷰티 카테고리 전문 MD입니다. 주로 스킨케어, 클렌징, 남성화장품, 선케어를 담당합니다. 
 아래 주요 브랜드/상품 뉴스 5건을 분석하여 다음 규칙을 엄격히 지켜 응답해주세요:
 
@@ -147,7 +162,6 @@ def generate_insights(articles):
         except Exception as e:
             print(f"⚠️ AI 호출 오류: {e}. 규칙 기반 엔진으로 전환합니다.")
 
-    # 💡 규칙 기반 엔진 고도화: 담당 카테고리(스킨, 선케어, 남성, 클렌징) 중심의 구체적 전략 세분화
     RULES = [
         (["비레디", "오브제", "남성", "맨즈", "포맨"], "• 맨즈 뷰티 카테고리 성장세에 맞춰 남성 전용 올인원/메이크업 기획전 메인 구좌 편성.<br>• 그루밍족 타겟을 위한 11번가 단독 트래블 키트 증정 협상으로 객단가 상승 도모."),
         (["선크림", "선쿠션", "선케어", "자외선", "달바"], "• 시즌 리스 아이템화 된 선케어 특성을 반영하여 대용량 1+1 묶음 구성 셀러와 가격 협상.<br>• 타 플랫폼 대비 가격 우위 선점을 위한 뷰티 단독 쿠폰 적극 연계."),
@@ -191,7 +205,6 @@ def generate_insights(articles):
             
         assigned = False
         text = title + " " + desc
-        # 1차: 키워드 매칭 (중복 피하기)
         for keywords, insight_text in RULES:
             if insight_text in used_insights: continue
             if any(k in text for k in keywords):
@@ -200,7 +213,6 @@ def generate_insights(articles):
                 assigned = True
                 break
         
-        # 2차: 강제 할당 (키워드 매칭 실패 시 사용하지 않은 규칙 중에서)
         if not assigned:
             for _, insight_text in RULES:
                 if insight_text not in used_insights:
@@ -209,7 +221,6 @@ def generate_insights(articles):
                     assigned = True
                     break
         
-        # 3차: 예비 인사이트 순차 할당 (규칙 초과 시)
         if not assigned:
             a["insight"] = DEFAULT_INSIGHTS[default_insight_index % len(DEFAULT_INSIGHTS)]
             default_insight_index += 1
