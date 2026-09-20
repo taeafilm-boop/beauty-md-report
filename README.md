@@ -1,1 +1,1 @@
-# beauty-md-report
+# beauty-news-report
