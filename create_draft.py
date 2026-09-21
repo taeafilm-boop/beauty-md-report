@@ -64,7 +64,7 @@ def fetch_cosmetic_news():
     req = urllib.request.Request(rss_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
     
     articles = []
-    used_brands = set() # 💡 핵심: 리포트에 이미 들어간 브랜드 추적
+    used_brands = set()
     
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
@@ -84,7 +84,6 @@ def fetch_cosmetic_news():
                 else:
                     title = raw_title
                     
-                # 💡 필터 1: 특정 브랜드 도배 방지 (동일 브랜드 기사는 1개만 허용)
                 current_brand = None
                 for b in BRANDS:
                     if b in title:
@@ -92,16 +91,14 @@ def fetch_cosmetic_news():
                         break
                 
                 if current_brand and current_brand in used_brands:
-                    continue # 이미 챙긴 브랜드면 과감히 패스하고 다음 기사 탐색
+                    continue
                     
-                # 💡 필터 2: 보도자료 복붙 기사 방지 (앞 10글자가 같으면 유사 기사로 간주하여 패스)
                 title_prefix = title.replace(" ", "")[:10]
                 if any(a["title"].replace(" ", "")[:10] == title_prefix for a in articles):
                     continue
                     
                 meta_desc = fetch_article_summary(link)
                 
-                # 브랜드가 식별되었으면 목록에 추가
                 if current_brand:
                     used_brands.add(current_brand)
                     
@@ -237,47 +234,51 @@ if not articles:
 
 articles = generate_insights(articles)
 
+# 카드 디자인 (여백 확보, 11번가 폰트, 컬러 코드 조정)
 cards_html = ""
 for idx, a in enumerate(articles):
     num_str = f"[{idx+1:02d} / {len(articles):02d}]"
     is_last = (idx == len(articles) - 1)
-    border_style = "padding-bottom:10px;" if is_last else "padding-bottom:22px; margin-bottom:22px; border-bottom:1px solid #eeeeee;"
+    border_style = "padding-bottom:10px;" if is_last else "padding-bottom:30px; margin-bottom:30px; border-bottom:1px solid #E5E5E5;"
     
     cards_html += f"""
         <div style="{border_style}">
-          <div style="font-size:13px; color:#FA2828; font-weight:800; margin-bottom:6px; letter-spacing:0.3px;">{num_str} {a['source']}</div>
-          <div style="font-size:18px; font-weight:800; color:#111111; margin-bottom:12px; line-height:1.42; letter-spacing:-0.4px;">{a['title']}</div>
-          <div style="font-size:13px; color:#444444; line-height:1.65; margin-bottom:14px;">
+          <div style="font-size:14px; color:#FA2828; font-weight:900; margin-bottom:8px; letter-spacing:0.5px;">{num_str} <span style="color:#555555; background-color:#F4F4F4; padding:2px 8px; border-radius:4px; margin-left:4px; font-size:12px;">{a['source']}</span></div>
+          <div style="font-size:20px; font-weight:800; color:#111111; margin-bottom:16px; line-height:1.4; letter-spacing:-0.5px;">
+             {a['title']}
+          </div>
+          <div style="font-size:15px; color:#444444; line-height:1.7; margin-bottom:20px; letter-spacing:-0.3px;">
             {a['summary']}
           </div>
-          <div style="background-color:#fff5f5; border-radius:8px; padding:13px 15px; border-left:3px solid #FA2828; font-size:13px; line-height:1.55; color:#222222; margin-bottom:12px;">
-            <b style="color:#FA2828;">💡 MD 인사이트:</b><br>
+          <div style="background-color:#FFF5F5; border-radius:10px; padding:18px 20px; border-left:4px solid #FA2828; font-size:14px; line-height:1.65; color:#222222; margin-bottom:16px; letter-spacing:-0.2px;">
+            <b style="color:#FA2828; display:block; margin-bottom:6px; font-size:15px;">💡 MD 인사이트:</b>
             {a['insight']}
           </div>
           <div style="text-align:right;">
-            <a href="{a['link']}" target="_blank" style="color:#666666; font-size:12px; text-decoration:none; font-weight:700;">🔗 기사 원문 보기 &gt;</a>
+            <a href="{a['link']}" target="_blank" style="display:inline-block; border:1px solid #FA2828; color:#FA2828; padding:8px 16px; border-radius:6px; font-size:13px; text-decoration:none; font-weight:800; letter-spacing:-0.2px;">기사 원문 보기 &gt;</a>
           </div>
         </div>
     """
 
+# 전체 템플릿 (11STREET Gothic 기반, 상하 여백 최적화)
 html_content = f"""
-<div style="background-color:#ffffff; padding:20px 10px; font-family:'11StreetGothic', '11STREET Gothic', '11번가 고딕', 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;">
-  <table width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width:680px; margin:0 auto; background-color:#ffffff; border:1px solid #eaeaea; border-radius:12px; overflow:hidden;">
+<div style="background-color:#F7F8F9; padding:40px 10px; font-family:'11STREET Gothic', '11번가 고딕', 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;">
+  <table width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width:720px; margin:0 auto; background-color:#ffffff; border:1px solid #DDDDDD; border-radius:16px; overflow:hidden;">
     <tr>
-      <td align="center" style="background-color:#FA2828; padding:28px 20px; color:#ffffff;">
-        <div style="font-size:12px; font-weight:bold; letter-spacing:1px; opacity:0.9; margin-bottom:6px;">11ST BEAUTY MD BRIEF · DAILY REPORT</div>
-        <h2 style="margin:0; font-size:23px; font-weight:800; line-height:1.3; letter-spacing:-0.5px;">11번가 뷰티 MD 인사이트 리포트</h2>
-        <div style="font-size:13px; margin-top:8px; font-weight:600; opacity:0.95;">{date_str}</div>
+      <td align="center" style="background-color:#111111; padding:35px 20px; color:#ffffff; border-top: 5px solid #FA2828;">
+        <div style="font-size:13px; font-weight:800; letter-spacing:1.5px; opacity:0.85; margin-bottom:8px; color:#FA2828;">11ST BEAUTY MD BRIEF · DAILY REPORT</div>
+        <h2 style="margin:0; font-size:26px; font-weight:900; line-height:1.35; letter-spacing:-0.5px; color:#ffffff;">11번가 뷰티 MD 인사이트 리포트</h2>
+        <div style="font-size:14px; margin-top:10px; font-weight:500; opacity:0.8; letter-spacing:-0.2px;">{date_str} 발행</div>
       </td>
     </tr>
     <tr>
-      <td style="padding:24px 20px; background-color:#ffffff;">
+      <td style="padding:40px 30px; background-color:#ffffff;">
         {cards_html}
       </td>
     </tr>
     <tr>
-      <td align="center" style="background-color:#ffffff; padding:18px; font-size:12px; color:#999999; border-top:1px solid #eeeeee;">
-        본 리포트는 11번가 뷰티 MD를 위해 매일 오전 최신 시장 동향을 자동 분석하여 작성됩니다.
+      <td align="center" style="background-color:#F9F9F9; padding:25px; font-size:12px; color:#888888; border-top:1px solid #EEEEEE; line-height:1.6; letter-spacing:-0.3px;">
+        본 리포트는 11번가 뷰티 MD를 위해<br>매일 오전 최신 시장 동향을 자동 분석하여 작성됩니다.
       </td>
     </tr>
   </table>
