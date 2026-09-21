@@ -234,7 +234,6 @@ if not articles:
 
 articles = generate_insights(articles)
 
-# 카드 디자인 (여백 확보, 11번가 폰트, 컬러 코드 조정)
 cards_html = ""
 for idx, a in enumerate(articles):
     num_str = f"[{idx+1:02d} / {len(articles):02d}]"
@@ -260,15 +259,15 @@ for idx, a in enumerate(articles):
         </div>
     """
 
-# 전체 템플릿 (11STREET Gothic 기반, 상하 여백 최적화)
+# 💡 11번가 시그니처 레드 배너 복구
 html_content = f"""
 <div style="background-color:#F7F8F9; padding:40px 10px; font-family:'11STREET Gothic', '11번가 고딕', 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;">
   <table width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width:720px; margin:0 auto; background-color:#ffffff; border:1px solid #DDDDDD; border-radius:16px; overflow:hidden;">
     <tr>
-      <td align="center" style="background-color:#111111; padding:35px 20px; color:#ffffff; border-top: 5px solid #FA2828;">
-        <div style="font-size:13px; font-weight:800; letter-spacing:1.5px; opacity:0.85; margin-bottom:8px; color:#FA2828;">11ST BEAUTY MD BRIEF · DAILY REPORT</div>
+      <td align="center" style="background-color:#FA2828; padding:35px 20px; color:#ffffff;">
+        <div style="font-size:13px; font-weight:800; letter-spacing:1px; opacity:0.9; margin-bottom:8px;">11ST BEAUTY MD BRIEF · DAILY REPORT</div>
         <h2 style="margin:0; font-size:26px; font-weight:900; line-height:1.35; letter-spacing:-0.5px; color:#ffffff;">11번가 뷰티 MD 인사이트 리포트</h2>
-        <div style="font-size:14px; margin-top:10px; font-weight:500; opacity:0.8; letter-spacing:-0.2px;">{date_str} 발행</div>
+        <div style="font-size:14px; margin-top:10px; font-weight:700; opacity:0.9; letter-spacing:-0.2px;">{date_str} 발행</div>
       </td>
     </tr>
     <tr>
