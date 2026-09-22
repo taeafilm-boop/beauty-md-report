@@ -23,7 +23,7 @@ now = time.localtime()
 date_str = f"{now.tm_year}년 {now.tm_mon:02d}월 {now.tm_mday:02d}일 ({weekdays[now.tm_wday]})"
 
 # ══════════════════════════════════════════════════════
-# ▶ 2. 뉴스 데이터 수집 (구글 RSS + 24시간 이내 최신 기사만)
+# ▶ 2. 뉴스 데이터 수집 (최근 8시간 이내, 브랜드 무관 뷰티 전체)
 # ══════════════════════════════════════════════════════
 def fetch_article_summary(url):
     try:
@@ -48,24 +48,18 @@ def fetch_article_summary(url):
     return ""
 
 def fetch_cosmetic_news():
-    BRANDS = [
-        "메디힐", "라운드랩", "토리든", "에스트라", "넘버즈인", "아누아", 
-        "바이오던스", "닥터지", "아이소이", "일소", "비레디", "오브제", 
-        "클리오", "롬앤", "웨이크메이크", "퓌", "VT", "구달", "달바", "스킨푸드"
-    ]
+    # 💡 특정 브랜드명을 제외하고, 뷰티 카테고리를 포괄하는 키워드로 폭넓게 탐색
+    category_keywords = "화장품 OR 뷰티 OR 스킨케어 OR 메이크업 OR 코스메틱 OR 더마 OR 선케어 OR 클렌징 OR 향수"
+    action_keywords = "신제품 OR 출시 OR 신상 OR 론칭 OR 팝업 OR 콜라보 OR 앰배서더 OR 완판 OR 랭킹 OR 돌파"
     
-    brand_query = " OR ".join(BRANDS)
-    product_keywords = "신제품 OR 출시 OR 신상 OR 완판 OR 랭킹 OR 쿠션 OR 앰플 OR 세럼 OR 크림 OR 립 OR 패드 OR 클렌징 OR 선크림"
-    
-    # 💡 when:1d (최근 24시간 이내) 옵션으로 어제 뉴스 중복 완전 차단
-    query = f"({brand_query}) ({product_keywords}) when:1d"
+    # 💡 when:8h (최근 8시간 이내) 옵션으로 가장 최신 이슈만 추출
+    query = f"({category_keywords}) ({action_keywords}) when:8h"
     encoded_query = urllib.parse.quote(query)
     rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl=ko&gl=KR&ceid=KR:ko"
     
     req = urllib.request.Request(rss_url, headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"})
     
     articles = []
-    used_brands = set()
     
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
@@ -85,26 +79,13 @@ def fetch_cosmetic_news():
                 else:
                     title = raw_title
                     
-                # 💡 특정 브랜드 도배 방지
-                current_brand = None
-                for b in BRANDS:
-                    if b in title:
-                        current_brand = b
-                        break
-                
-                if current_brand and current_brand in used_brands:
-                    continue
-                    
-                # 💡 보도자료 복붙 기사 방지 (제목 앞 10글자 유사도 필터링)
-                title_prefix = title.replace(" ", "")[:10]
-                if any(a["title"].replace(" ", "")[:10] == title_prefix for a in articles):
+                # 💡 보도자료 복붙 기사 방지 (제목 앞 12글자 유사도 필터링)
+                title_prefix = title.replace(" ", "")[:12]
+                if any(a["title"].replace(" ", "")[:12] == title_prefix for a in articles):
                     continue
                     
                 meta_desc = fetch_article_summary(link)
                 
-                if current_brand:
-                    used_brands.add(current_brand)
-                    
                 articles.append({
                     "title": title,
                     "source": source_name,
@@ -126,12 +107,12 @@ def generate_insights(articles):
     if GEMINI_API_KEY:
         print("💡 Gemini AI를 사용하여 기사 요약 및 인사이트를 생성합니다...")
         try:
-            prompt = """당신은 11번가 뷰티 카테고리 전문 MD입니다. 주로 스킨케어, 클렌징, 남성화장품, 선케어를 담당합니다. 
-아래 주요 브랜드/상품 뉴스 5건을 분석하여 다음 규칙을 엄격히 지켜 응답해주세요:
+            prompt = """당신은 11번가 뷰티 카테고리 전문 MD입니다. 스킨케어, 메이크업, 남성화장품 등 뷰티 전반을 담당합니다. 
+아래 주요 뷰티 뉴스 5건을 분석하여 다음 규칙을 엄격히 지켜 응답해주세요:
 
-1) summary: 기사 내용을 바탕으로 브랜드명 및 핵심 스펙 중심의 2줄 요약 (문장 앞에 • 포함, 줄바꿈은 <br>. 'Google News' 등 영문 시스템 문구 절대 제외)
+1) summary: 기사 내용을 바탕으로 론칭 브랜드명 및 핵심 스펙 중심의 2줄 요약 (문장 앞에 • 포함, 줄바꿈은 <br>. 'Google News' 등 영문 시스템 문구 절대 제외)
 2) insight: 11번가 MD 관점에서 경쟁사(쿠팡/네이버쇼핑 등) 대비 우위를 점할 수 있는 실질적인 소싱, 가격 전략, 셀러 협상, 기획전 전략 2줄 (문장 앞에 • 포함, 줄바꿈은 <br>).
-*핵심 주의사항*: 5개 기사의 insight 내용이 절대 겹치지 않아야 합니다. (예: 1번은 묶음상품 단가 협상, 2번은 남성 타겟 확장, 3번은 라이브 방송 기획, 4번은 뷰티플러스 쿠폰 활용 등 각각 다른 각도의 전략 제시)
+*핵심 주의사항*: 5개 기사의 insight 내용이 절대 겹치지 않아야 합니다. (예: 1번은 신규 브랜드 입점 제안, 2번은 단독 굿즈 확보, 3번은 타겟팅 쿠폰 활용 등 각각 다른 각도의 전략 제시)
 
 반드시 아래 JSON 형식으로만 응답해주세요:
 [
@@ -162,14 +143,20 @@ def generate_insights(articles):
         except Exception as e:
             print(f"⚠️ AI 호출 오류: {e}. 규칙 기반 엔진으로 전환합니다.")
 
-    # AI 실패 시 예외 처리용 규칙 (기존과 동일)
+    # AI 호출 실패 시 적용될 범용 규칙
     RULES = [
-        (["비레디", "오브제", "남성", "맨즈", "포맨"], "• 맨즈 뷰티 카테고리 성장세에 맞춰 남성 전용 올인원/메이크업 기획전 메인 구좌 편성.<br>• 그루밍족 타겟을 위한 11번가 단독 트래블 키트 증정 협상으로 객단가 상승 도모."),
-        (["선크림", "선쿠션", "선케어", "자외선", "달바"], "• 시즌 리스 아이템화 된 선케어 특성을 반영하여 대용량 1+1 묶음 구성 셀러와 가격 협상.<br>• 타 플랫폼 대비 가격 우위 선점을 위한 뷰티 단독 쿠폰 적극 연계."),
-        (["메디힐", "토리든", "스킨푸드", "패드", "클렌징", "일소"], "• 스킨케어 및 클렌징 루틴의 필수품인 토너패드/클렌징오일 대용량 기획전 11절 타겟팅.<br>• 소모 주기가 짧은 품목 특성상 장바구니 쿠폰 연계로 락인 효과 극대화."),
-        (["에스트라", "닥터지", "아누아", "진정", "장벽"], "• 민감성/트러블 케어 수요를 겨냥한 더마 코스메틱 위크 기획 및 단독 굿즈 결합.<br>• 상세페이지 내 11번가 고객 우수 리뷰 최상단 노출 세팅으로 전환율 견인.")
+        (["남성", "맨즈", "포맨", "옴므"], "• 맨즈 뷰티 성장세에 맞춰 남성 전용 올인원/메이크업 기획전 메인 구좌 편성.<br>• 그루밍족 타겟을 위한 11번가 단독 트래블 키트 증정 협상으로 객단가 상승 도모."),
+        (["선크림", "선쿠션", "선케어", "자외선"], "• 시즌 리스 아이템화 된 선케어 특성을 반영하여 대용량 1+1 묶음 구성 셀러와 가격 협상.<br>• 타 플랫폼 대비 가격 우위 선점을 위한 뷰티 단독 쿠폰 적극 연계."),
+        (["패드", "클렌징", "토너", "모공"], "• 스킨케어 및 클렌징 루틴의 필수품인 토너패드/클렌징오일 대용량 기획전 11절 타겟팅.<br>• 소모 주기가 짧은 품목 특성상 장바구니 쿠폰 연계로 락인 효과 극대화."),
+        (["진정", "장벽", "더마", "민감성"], "• 민감성/트러블 케어 수요를 겨냥한 더마 코스메틱 위크 기획 및 단독 굿즈 결합.<br>• 상세페이지 내 11번가 고객 우수 리뷰 최상단 노출 세팅으로 전환율 견인."),
+        (["색조", "립", "틴트", "쿠션", "팔레트"], "• 시즌 신규 컬러 론칭 시점에 맞춘 선오픈 특가 및 11번가 단독 증정품 기획.<br>• 1020 타겟 유입을 위한 인플루언서 콜라보 마케팅 및 선물하기 서비스 적극 연동.")
     ]
-    DEFAULT_INSIGHTS = ["• 핵심 타겟층의 검색 키워드 트렌드를 반영한 기획전 타이틀 도출 및 연관 상품 크로스셀링 유도.<br>• 시즌 오프 및 리뉴얼 이슈가 있는 상품군의 클리어런스 세일 기획으로 단기 매출 볼륨 확대."]
+    
+    DEFAULT_INSIGHTS = [
+        "• 주요 이커머스 베스트셀러의 11번가 내 가격 경쟁력 상시 모니터링 및 셀러 단가 협상.<br>• 리뷰 평점이 높은 라이징 상품을 발굴하여 뷰티 탭 메인 배너 노출로 초기 트래픽 집중 지원.",
+        "• 신규 론칭 브랜드의 빠른 플랫폼 안착을 위한 프로모션 구좌 제안 및 단독 혜택 기획.<br>• 화제성 높은 뷰티 신상품의 11번가 선론칭을 타진하여 트래픽 선점 효과 극대화.",
+        "• 뷰티 고관여 고객 확대를 위한 단독 구성(본품+미니어처 다수) 소싱으로 가심비 공략.<br>• 충성 고객 대상 추가 적립 혜택을 부여하여 타사 대비 체감 혜택 극대화 및 충성도 제고."
+    ]
     
     used_insights = set()
     default_insight_index = 0
@@ -183,9 +170,9 @@ def generate_insights(articles):
             clean_s = [s.strip() for s in re.split(r'[.!?]', desc) if len(s.strip()) > 10]
             if len(clean_s) >= 2: a["summary"] = f"• {clean_s[0]}.<br>• {clean_s[1]}."
             elif len(clean_s) == 1: a["summary"] = f"• {clean_title}.<br>• {clean_s[0]}."
-            else: a["summary"] = f"• {clean_title}.<br>• H&B 및 온라인 뷰티 채널 내 주요 트렌드 실시간 모니터링 필요."
+            else: a["summary"] = f"• {clean_title}.<br>• H&B 및 온라인 뷰티 채널 내 신제품 론칭 트렌드 모니터링."
         else:
-            a["summary"] = f"• {clean_title}.<br>• 브랜드 주력 신상품 온·오프라인 론칭 및 전략적 마케팅 프로모션 전개."
+            a["summary"] = f"• {clean_title}.<br>• 라이징 뷰티 브랜드 주력 신상품 론칭 및 마케팅 프로모션 전개."
             
         assigned = False
         text = title + " " + desc
@@ -209,16 +196,16 @@ def generate_insights(articles):
 print("🔍 뷰티 최신 뉴스 크롤링 시작...")
 articles = fetch_cosmetic_news()
 
-# 만약 24시간 내 뉴스가 1건도 없더라도 에러를 내지 않고 일반 뷰티 트렌드 문구로 대체
+# 💡 8시간 내 기사가 없을 경우를 대비한 유연한 예외 처리
 if not articles:
-    print("⚠️ 24시간 내 매칭되는 신규 기사가 없어 기본 트렌드 리포트를 생성합니다.")
+    print("⚠️ 최근 8시간 내 매칭되는 신규 기사가 없어 기본 트렌드 리포트를 생성합니다.")
     articles = [{
-        "title": "최근 24시간 내 타겟 뷰티 브랜드 주요 신규 보도자료 없음",
+        "title": "최근 8시간 내 주요 뷰티 신제품 론칭 보도자료 없음",
         "source": "11ST MD System",
         "link": "#",
-        "desc": "금일 오전 기준 주요 타겟 브랜드의 공식 보도자료 및 신제품 론칭 이슈가 없습니다. 상시 기획전 구좌 점검 및 기존 베스트셀러 가격 모니터링에 집중하시기 바랍니다.",
-        "summary": "• 금일 오전 기준 주요 타겟 브랜드의 공식 보도자료 및 신제품 론칭 이슈 없음.<br>• 상시 기획전 구좌 점검 및 기존 베스트셀러 단가 모니터링 집중 필요.",
-        "insight": "• 경쟁사 주력 행사 구좌 모니터링을 통한 11번가 메인 기획전 딜 소싱 강화.<br>• 스테디셀러 위주의 장바구니 쿠폰 연계로 비수기 방어 로직 설계."
+        "desc": "금일 오전 기준 뷰티 카테고리 공식 보도자료 및 신제품 이슈가 없습니다. 상시 기획전 구좌 점검 및 기존 베스트셀러 가격 모니터링에 집중하시기 바랍니다.",
+        "summary": "• 최근 8시간 내 뷰티 브랜드 공식 보도자료 및 신제품 론칭 이슈 없음.<br>• 11번가 내 주요 셀러 기획전 현황 점검 및 단가 경쟁력 확보 집중.",
+        "insight": "• 뷰티 메인 구좌 체류 시간 증대를 위한 시즈널 기획전 배너 카피라이팅 최적화.<br>• 트래픽 비수기 방어를 위해 타사 베스트 랭킹 교차 검증 후 장바구니 혜택 강화."
     }]
 else:
     articles = generate_insights(articles)
@@ -265,7 +252,7 @@ html_content = f"""
     </tr>
     <tr>
       <td align="center" style="background-color:#F9F9F9; padding:25px; font-size:12px; color:#888888; border-top:1px solid #EEEEEE; line-height:1.6; letter-spacing:-0.3px;">
-        본 리포트는 11번가 뷰티 MD를 위해<br>최근 24시간 내 최신 뷰티 시장 동향을 자동 분석하여 작성됩니다.
+        본 리포트는 11번가 뷰티 MD를 위해<br>최근 8시간 내 등록된 뷰티 신제품 및 트렌드 기사를 자동 분석하여 작성됩니다.
       </td>
     </tr>
   </table>
@@ -277,7 +264,7 @@ html_content = f"""
 # ══════════════════════════════════════════════════════
 print("📩 Gmail 임시보관함에 저장 중...")
 msg = MIMEMultipart("alternative")
-msg["Subject"] = f"[11번가 뷰티 MD 인사이트 리포트] 일간 트렌드 및 브리프 ({now.tm_year}-{now.tm_mon:02d}-{now.tm_mday:02d})"
+msg["Subject"] = f"[11번가 뷰티 MD 인사이트 리포트] 최신 뷰티 트렌드 브리프 ({now.tm_year}-{now.tm_mon:02d}-{now.tm_mday:02d})"
 msg["From"] = GMAIL_USER
 msg["To"] = TO_EMAIL
 msg.attach(MIMEText(html_content, "html"))
