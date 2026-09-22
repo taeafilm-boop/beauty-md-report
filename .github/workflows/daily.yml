@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 env:
-  TZ: Asia/Seoul # 👈 시스템 시간대를 한국 시간으로 강제 설정
+  TZ: Asia/Seoul # 한국 시간대 설정
 
 jobs:
   build:
@@ -14,8 +14,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 💡 에러 원인 해결: 스크립트 실행 전 BeautifulSoup 라이브러리를 먼저 설치합니다.
+      - name: 라이브러리 설치
+        run: python -m pip install --upgrade pip beautifulsoup4
+
       - name: Run Draft Creator
         env:
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           GMAIL_PASS: ${{ secrets.GMAIL_APP_PASSWORD }}
-        run: python3 create_draft.py
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python create_draft.py
