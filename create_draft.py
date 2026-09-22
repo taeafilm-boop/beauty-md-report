@@ -57,7 +57,8 @@ def fetch_cosmetic_news():
     brand_query = " OR ".join(BRANDS)
     product_keywords = "신제품 OR 출시 OR 신상 OR 완판 OR 랭킹 OR 쿠션 OR 앰플 OR 세럼 OR 크림 OR 립 OR 패드 OR 클렌징 OR 선크림"
     
-    query = f"({brand_query}) ({product_keywords}) when:2d"
+    # 💡 when:2d (48시간) -> when:1d (최근 24시간)으로 변경하여 중복 기사 원천 차단
+    query = f"({brand_query}) ({product_keywords}) when:1d"
     encoded_query = urllib.parse.quote(query)
     rss_url = f"https://news.google.com/rss/search?q={encoded_query}&hl=ko&gl=KR&ceid=KR:ko"
     
@@ -259,7 +260,6 @@ for idx, a in enumerate(articles):
         </div>
     """
 
-# 💡 11번가 시그니처 레드 배너 복구
 html_content = f"""
 <div style="background-color:#F7F8F9; padding:40px 10px; font-family:'11STREET Gothic', '11번가 고딕', 'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;">
   <table width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width:720px; margin:0 auto; background-color:#ffffff; border:1px solid #DDDDDD; border-radius:16px; overflow:hidden;">
